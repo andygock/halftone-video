@@ -2,6 +2,8 @@
 
 This project is a Vite + React application that converts video into a halftone effect SVG animation. The application allows users to upload a video, adjust the dot size, sample resolution, and output frame rate to create a custom halftone animation. Inspired by this [OpenAI's Super Bowl ad](https://www.youtube.com/watch?v=kIhb5pEo_j0).
 
+[Demo](https://andygock.github.io/halftone-video/)
+
 ![Screenshot](./screenshot_horse.gif)
 
 ## Features
