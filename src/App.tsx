@@ -14,6 +14,7 @@ const App: React.FC = () => {
   const [sampleResolution, setSampleResolution] = useState<number>(10); // Pixel step size
   const [frameRate, setFrameRate] = useState<number>(8); // Output frame rate (fps)
   const [halftoneData, setHalftoneData] = useState<CircleData[]>([]);
+  const [asciiArt, setAsciiArt] = useState<string>("");
   const [videoDimensions, setVideoDimensions] = useState<{
     width: number;
     height: number;
@@ -21,6 +22,7 @@ const App: React.FC = () => {
     width: 640,
     height: 360,
   });
+  const [outputMode, setOutputMode] = useState<"ascii" | "svg">("svg");
 
   // Refs for the hidden video and canvas elements.
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -52,6 +54,7 @@ const App: React.FC = () => {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
     const circles: CircleData[] = [];
+    let ascii = "";
 
     // Loop over the pixels using the sample resolution.
     for (let y = 0; y < canvas.height; y += sampleResolution) {
@@ -60,14 +63,24 @@ const App: React.FC = () => {
         const r = data[index];
         const g = data[index + 1];
         const b = data[index + 2];
+
         // Calculate luminance using the standard formula.
         const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+
         // For a halftone effect, darker areas yield larger circles.
         const radius = (1 - luminance / 255) * dotSize;
         circles.push({ x, y, r: radius });
+
+        // Map luminance to an ASCII character.
+        const charIndex = Math.floor(
+          (luminance / 255) * (asciiChars.length - 1)
+        );
+        ascii += asciiChars[charIndex];
       }
+      ascii += "\n";
     }
     setHalftoneData(circles);
+    setAsciiArt(ascii);
   };
 
   // When the video metadata is loaded, update dimensions and start looping playback.
@@ -106,6 +119,9 @@ const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frameRate, dotSize, sampleResolution, videoDimensions, videoUrl]);
 
+  // ASCII characters based on density.
+  const asciiChars = "@%#*+=-:. ";
+
   return (
     <div className="app-container">
       <h1>Halftone Video Converter</h1>
@@ -115,18 +131,34 @@ const App: React.FC = () => {
           <input type="file" accept="video/*" onChange={handleVideoUpload} />
         </label>
       </div>
+
       <div className="control-group">
         <label>
-          Dot Size: {dotSize} px&nbsp;
-          <input
-            type="range"
-            min="1"
-            max="50"
-            value={dotSize}
-            onChange={(e) => setDotSize(Number(e.target.value))}
-          />
+          Output Mode:&nbsp;
+          <select
+            value={outputMode}
+            onChange={(e) => setOutputMode(e.target.value as "ascii" | "svg")}
+          >
+            <option value="ascii">ASCII Art</option>
+            <option value="svg">SVG</option>
+          </select>
         </label>
       </div>
+
+      {outputMode === "svg" && (
+        <div className="control-group">
+          <label>
+            Dot Size: {dotSize} px&nbsp;
+            <input
+              type="range"
+              min="1"
+              max="50"
+              value={dotSize}
+              onChange={(e) => setDotSize(Number(e.target.value))}
+            />
+          </label>
+        </div>
+      )}
       <div className="control-group">
         <label>
           Sample Resolution: {sampleResolution} px&nbsp;
@@ -157,23 +189,31 @@ const App: React.FC = () => {
           {/* Hidden video and canvas for frame processing */}
           <video ref={videoRef} src={videoUrl} className="hidden" />
           <canvas ref={canvasRef} className="hidden" />
+
           {/* Render the animated halftone SVG */}
-          <svg
-            width={videoDimensions.width}
-            height={videoDimensions.height}
-            className="halftone-svg"
-            viewBox={`0 0 ${videoDimensions.width} ${videoDimensions.height}`}
-          >
-            {halftoneData.map((circle, idx) => (
-              <circle
-                key={idx}
-                cx={circle.x}
-                cy={circle.y}
-                r={circle.r}
-                fill="black"
-              />
-            ))}
-          </svg>
+          {outputMode === "svg" && (
+            <svg
+              width={videoDimensions.width}
+              height={videoDimensions.height}
+              className="halftone-svg"
+              viewBox={`0 0 ${videoDimensions.width} ${videoDimensions.height}`}
+            >
+              {halftoneData.map((circle, idx) => (
+                <circle
+                  key={idx}
+                  cx={circle.x}
+                  cy={circle.y}
+                  r={circle.r}
+                  fill="black"
+                />
+              ))}
+            </svg>
+          )}
+
+          {/* Render the ASCII art */}
+          {outputMode === "ascii" && (
+            <pre className="ascii-art">{asciiArt}</pre>
+          )}
         </div>
       )}
     </div>

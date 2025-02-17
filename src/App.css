@@ -18,3 +18,9 @@
 .halftone-svg {
   border: 1px solid #ccc;
 }
+
+.ascii-art {
+  /* experimentally determine these values */
+  line-height: 10px;
+  letter-spacing: 3px;
+}
