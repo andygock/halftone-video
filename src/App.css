@@ -1,10 +1,15 @@
-.app-container {
-  padding: 20px;
+body {
+  margin: 0;
+  padding: 0;
   font-family: Arial, sans-serif;
 }
 
+.app-container {
+  padding: 1rem;
+}
+
 .control-group {
-  margin-bottom: 10px;
+  margin-bottom: 1rem;
 }
 
 .video-container {
