@@ -1,50 +1,48 @@
-# Half Tone Video Converter
+# Halftone Video Converter
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This project is a Vite + React application that converts video into a halftone effect SVG animation. The application allows users to upload a video, adjust the dot size, sample resolution, and output frame rate to create a custom halftone animation. Inspired by this [OpenAI's Super Bowl ad](https://www.youtube.com/watch?v=kIhb5pEo_j0).
 
-Currently, two official plugins are available:
+![Screenshot](./screenshot_horse.gif)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Features
 
-## Expanding the ESLint configuration
+- Upload video files for processing.
+- Adjust dot size to control the maximum radius of halftone dots.
+- Adjust sample resolution to control the pixel step size.
+- Adjust output frame rate to control the animation speed.
+- Real-time preview of the halftone effect.
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+## Installation
 
-- Configure the top-level `parserOptions` property like this:
+I use `pnpm` for development, but you can use `npm` too. The instructions below use `pnpm`.
 
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+Clone the repository:
 
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
+    git clone https://github.com/andygock/halftone-video
+    cd halftone-video
 
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
+Install dependencies:
 
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
-})
-```
+    pnpm install
+
+Start the development server:
+
+    pnpm start
+
+Open your browser and navigate to `http://localhost:5173`.
+
+## Usage
+
+1. Upload a video file using the "Upload Video" input.
+2. Adjust the "Dot Size" slider to change the maximum radius of the halftone dots.
+3. Adjust the "Sample Resolution" slider to change the pixel step size.
+4. Adjust the "Output Frame Rate" slider to change the animation speed.
+5. The halftone effect will be applied in real-time and displayed as an SVG animation.
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request for any changes or improvements.
+
+## License
+
+This project is licensed under the MIT License.
