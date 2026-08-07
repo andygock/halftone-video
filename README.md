@@ -1,50 +1,112 @@
 # Halftone Video Converter
 
-This project is a Vite + React application that converts video into a halftone effect SVG animation. The application allows users to upload a video, adjust the dot size, sample resolution, and output frame rate to create a custom halftone animation. Inspired by this [OpenAI's Super Bowl ad](https://www.youtube.com/watch?v=kIhb5pEo_j0).
+A Vite and React application that turns a local video into a real-time
+halftone-dot or ASCII-art preview. Processing happens entirely in the browser;
+the selected video is not uploaded.
 
-[Demo](https://andygock.github.io/halftone-video/)
+Inspired by [OpenAI's Super Bowl ad](https://www.youtube.com/watch?v=kIhb5pEo_j0).
 
-![Screenshot](./screenshot_horse.gif)
+[Open the live demo](https://andygock.github.io/halftone-video/)
+
+![Animated halftone preview](./screenshot_horse.gif)
 
 ## Features
 
-- Upload video files for processing.
-- Adjust dot size to control the maximum radius of halftone dots.
-- Adjust sample resolution to control the pixel step size.
-- Adjust output frame rate to control the animation speed.
-- Real-time preview of the halftone effect.
+- Preview local video files as halftone dots or ASCII art.
+- Adjust the maximum halftone-dot radius.
+- Adjust pixel-sample spacing.
+- Control how frequently decoded video frames are sampled.
+- Bound preview resolution and sample count to keep large videos responsive.
+- Process videos locally without uploading them.
+
+The frame-rate control affects preview sampling frequency. It does not change
+the video's playback speed or create an exported animation.
+
+## Requirements
+
+- Node.js 20.19 or later, or Node.js 22.12 or later
+- pnpm 11.1.1, as declared in `package.json`
+- A modern browser with Canvas and HTML video support
+
+The `requestVideoFrameCallback` browser API is used when available. Browsers
+without it use a `requestAnimationFrame` fallback.
 
 ## Installation
 
-I use `pnpm` for development, but you can use `npm` too. The instructions below use `pnpm`.
-
-Clone the repository:
-
-    git clone https://github.com/andygock/halftone-video
-    cd halftone-video
-
-Install dependencies:
-
-    pnpm install
+```bash
+git clone https://github.com/andygock/halftone-video
+cd halftone-video
+pnpm install
+```
 
 Start the development server:
 
-    pnpm start
+```bash
+pnpm dev
+```
 
-Open your browser and navigate to `http://localhost:5173`.
+Then open <http://localhost:5173>.
 
 ## Usage
 
-1. Upload a video file using the "Upload Video" input.
-2. Adjust the "Dot Size" slider to change the maximum radius of the halftone dots.
-3. Adjust the "Sample Resolution" slider to change the pixel step size.
-4. Adjust the "Output Frame Rate" slider to change the animation speed.
-5. The halftone effect will be applied in real-time and displayed as an SVG animation.
+1. Select a video with the **Upload video** input.
+2. Choose **Halftone dots** or **ASCII art**.
+3. Adjust sample spacing and the preview sampling rate.
+4. In halftone mode, adjust the maximum dot radius.
+5. If browser autoplay is blocked, use the displayed **Play video** button.
+
+Videos larger than 1 GB or with decoded dimensions above 3840×2160 are
+rejected to prevent excessive browser resource use. The rendered preview's
+longest edge is limited to 1280 pixels, and each frame uses at most 20,000
+samples.
+
+## Project commands
+
+```bash
+pnpm dev           # Start the development server
+pnpm lint          # Run ESLint
+pnpm test          # Run unit tests once
+pnpm format        # Format supported files
+pnpm format:check  # Check formatting without changing files
+pnpm build         # Type-check and create a production build in docs/
+pnpm preview       # Preview the production build locally
+pnpm audit         # Check dependencies for known vulnerabilities
+```
+
+## Deployment
+
+Vite writes the production build to `docs/` with relative asset URLs. The
+directory is intentionally ignored on the source branch because the published
+site is maintained on the repository's `pages` branch. After validating a
+build, publish the contents of `docs/` through that branch or configure GitHub
+Actions to deploy the same directory.
+
+The relative Vite base allows the build to work under the
+`/halftone-video/` GitHub Pages path.
+
+## Architecture
+
+- `src/App.tsx` owns the selected video and coordinates processing.
+- `src/useVideoFrameLoop.ts` synchronizes processing with decoded frames.
+- `src/processing.ts` contains pure sampling and conversion functions.
+- `src/HalftoneControls.tsx` and `src/HalftonePreview.tsx` contain presentation
+  components.
+
+The live halftone output uses Canvas rather than thousands of SVG DOM elements.
+The application currently provides a preview only; it does not export Canvas,
+SVG, ASCII, or video files.
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request for any changes or improvements.
+Contributions are welcome. Before opening a pull request, run:
+
+```bash
+pnpm format:check
+pnpm lint
+pnpm test
+pnpm build
+```
 
 ## License
 
-This project is licensed under the MIT License.
+Licensed under the [MIT License](./LICENSE).

@@ -1,222 +1,251 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
+import { HalftoneControls, type OutputMode } from "./HalftoneControls";
+import { HalftonePreview } from "./HalftonePreview";
+import {
+  MAX_DECODED_PIXELS,
+  MAX_FILE_SIZE_BYTES,
+  MAX_SAMPLE_POINTS,
+} from "./constants";
+import {
+  buildAsciiArt,
+  buildHalftoneData,
+  calculatePreviewDimensions,
+  calculateSamplingGrid,
+  drawHalftone,
+} from "./processing";
+import { useVideoFrameLoop } from "./useVideoFrameLoop";
 
-interface CircleData {
-  x: number;
-  y: number;
-  r: number;
-}
-
-const App: React.FC = () => {
-  // State variables for the video and control settings.
+const App = () => {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [dotSize, setDotSize] = useState<number>(4); // Maximum dot radius (in pixels)
-  const [sampleResolution, setSampleResolution] = useState<number>(10); // Pixel step size
-  const [frameRate, setFrameRate] = useState<number>(8); // Output frame rate (fps)
-  const [halftoneData, setHalftoneData] = useState<CircleData[]>([]);
-  const [asciiArt, setAsciiArt] = useState<string>("");
-  const [videoDimensions, setVideoDimensions] = useState<{
-    width: number;
-    height: number;
-  }>({
+  const [dotSize, setDotSize] = useState(4);
+  const [sampleResolution, setSampleResolution] = useState(10);
+  const [frameRate, setFrameRate] = useState(8);
+  const [asciiArt, setAsciiArt] = useState("");
+  const [outputMode, setOutputMode] = useState<OutputMode>("halftone");
+  const [videoReady, setVideoReady] = useState(false);
+  const [playbackBlocked, setPlaybackBlocked] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [previewDimensions, setPreviewDimensions] = useState({
     width: 640,
     height: 360,
   });
-  const [outputMode, setOutputMode] = useState<"ascii" | "svg">("svg");
 
-  // Refs for the hidden video and canvas elements.
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const samplingCanvasRef = useRef<HTMLCanvasElement>(null);
+  const outputCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Handle video file upload.
-  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const url = URL.createObjectURL(file);
-      setVideoUrl(url);
-    }
-  };
+  const maximumDotSize = Math.max(1, Math.floor(sampleResolution / 2));
 
-  // This function grabs the current video frame, samples pixels and computes circles.
-  const updateHalftoneData = () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Ensure the canvas matches the video dimensions.
-    canvas.width = videoDimensions.width;
-    canvas.height = videoDimensions.height;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    // Retrieve the image data.
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-    const circles: CircleData[] = [];
-    let ascii = "";
-
-    // Loop over the pixels using the sample resolution.
-    for (let y = 0; y < canvas.height; y += sampleResolution) {
-      for (let x = 0; x < canvas.width; x += sampleResolution) {
-        const index = (y * canvas.width + x) * 4;
-        const r = data[index];
-        const g = data[index + 1];
-        const b = data[index + 2];
-
-        // Calculate luminance using the standard formula.
-        const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-
-        // For a halftone effect, darker areas yield larger circles.
-        const radius = (1 - luminance / 255) * dotSize;
-        circles.push({ x, y, r: radius });
-
-        // Map luminance to an ASCII character.
-        const charIndex = Math.floor(
-          (luminance / 255) * (asciiChars.length - 1)
-        );
-        ascii += asciiChars[charIndex];
-      }
-      ascii += "\n";
-    }
-    setHalftoneData(circles);
-    setAsciiArt(ascii);
-  };
-
-  // When the video metadata is loaded, update dimensions and start looping playback.
   useEffect(() => {
-    const video = videoRef.current;
-    if (video) {
-      const handleLoadedMetadata = () => {
-        setVideoDimensions({
-          width: video.videoWidth,
-          height: video.videoHeight,
-        });
-        video.loop = true;
-        video.play();
-      };
-      video.addEventListener("loadedmetadata", handleLoadedMetadata);
-      return () => {
-        video.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      };
-    }
+    return () => {
+      if (videoUrl) URL.revokeObjectURL(videoUrl);
+    };
   }, [videoUrl]);
 
-  // Set up an interval to update the halftone effect at the desired frame rate.
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (
-        videoRef.current &&
-        !videoRef.current.paused &&
-        !videoRef.current.ended
-      ) {
-        updateHalftoneData();
-      }
-    }, 1000 / frameRate);
+  const handleVideoUpload = useCallback((file: File | null) => {
+    if (!file) return;
 
-    return () => clearInterval(interval);
+    if (!file.type.startsWith("video/")) {
+      setError("Please select a supported video file.");
+      return;
+    }
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frameRate, dotSize, sampleResolution, videoDimensions, videoUrl]);
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setError("The selected video is larger than the 1 GB safety limit.");
+      return;
+    }
 
-  // ASCII characters based on density.
-  const asciiChars = "@%#*+=-:. ";
+    setError(null);
+    setPlaybackBlocked(false);
+    setVideoReady(false);
+    setAsciiArt("");
+    setVideoUrl(URL.createObjectURL(file));
+  }, []);
+
+  const startPlayback = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    try {
+      await video.play();
+      setPlaybackBlocked(false);
+    } catch {
+      setPlaybackBlocked(true);
+    }
+  }, []);
+
+  const handleLoadedMetadata = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const decodedPixels = video.videoWidth * video.videoHeight;
+    if (
+      video.videoWidth === 0 ||
+      video.videoHeight === 0 ||
+      decodedPixels > MAX_DECODED_PIXELS
+    ) {
+      video.pause();
+      setVideoReady(false);
+      setError(
+        "This video's decoded resolution is too large to process safely.",
+      );
+      return;
+    }
+
+    setPreviewDimensions(
+      calculatePreviewDimensions(video.videoWidth, video.videoHeight),
+    );
+    setVideoReady(true);
+    setError(null);
+    void startPlayback();
+  }, [startPlayback]);
+
+  const handleSampleResolutionChange = useCallback((value: number) => {
+    setSampleResolution(value);
+    setDotSize((current) =>
+      Math.min(current, Math.max(1, Math.floor(value / 2))),
+    );
+  }, []);
+
+  const processCurrentFrame = useCallback(() => {
+    const video = videoRef.current;
+    const samplingCanvas = samplingCanvasRef.current;
+    if (!video || !samplingCanvas || !videoReady) return;
+
+    const samplingContext = samplingCanvas.getContext("2d", {
+      willReadFrequently: true,
+    });
+    if (!samplingContext) return;
+
+    const grid = calculateSamplingGrid(
+      previewDimensions.width,
+      previewDimensions.height,
+      sampleResolution,
+      MAX_SAMPLE_POINTS,
+    );
+
+    if (
+      samplingCanvas.width !== grid.columns ||
+      samplingCanvas.height !== grid.rows
+    ) {
+      samplingCanvas.width = grid.columns;
+      samplingCanvas.height = grid.rows;
+    }
+
+    samplingContext.drawImage(video, 0, 0, grid.columns, grid.rows);
+    const pixels = samplingContext.getImageData(
+      0,
+      0,
+      grid.columns,
+      grid.rows,
+    ).data;
+
+    if (outputMode === "ascii") {
+      setAsciiArt(buildAsciiArt(pixels, grid.columns, grid.rows));
+      return;
+    }
+
+    const outputCanvas = outputCanvasRef.current;
+    const outputContext = outputCanvas?.getContext("2d");
+    if (!outputCanvas || !outputContext) return;
+
+    const circles = buildHalftoneData(
+      pixels,
+      grid.columns,
+      grid.rows,
+      previewDimensions.width,
+      previewDimensions.height,
+      dotSize,
+    );
+    drawHalftone(
+      outputCanvas,
+      outputContext,
+      circles,
+      previewDimensions.width,
+      previewDimensions.height,
+    );
+  }, [
+    dotSize,
+    outputMode,
+    previewDimensions.height,
+    previewDimensions.width,
+    sampleResolution,
+    videoReady,
+  ]);
+
+  useVideoFrameLoop({
+    videoRef,
+    active: videoReady,
+    framesPerSecond: frameRate,
+    onFrame: processCurrentFrame,
+  });
 
   return (
-    <div className="app-container">
+    <main className="app-container">
       <h1>Halftone Video Converter</h1>
-      <div className="control-group">
-        <label>
-          Upload Video:&nbsp;
-          <input type="file" accept="video/*" onChange={handleVideoUpload} />
-        </label>
-      </div>
+      <p className="intro">
+        Process a local video into a real-time halftone or ASCII preview. The
+        video stays in your browser and is not uploaded.
+      </p>
 
-      <div className="control-group">
-        <label>
-          Output Mode:&nbsp;
-          <select
-            value={outputMode}
-            onChange={(e) => setOutputMode(e.target.value as "ascii" | "svg")}
-          >
-            <option value="ascii">ASCII Art</option>
-            <option value="svg">SVG</option>
-          </select>
-        </label>
-      </div>
+      <HalftoneControls
+        dotSize={dotSize}
+        frameRate={frameRate}
+        maximumDotSize={maximumDotSize}
+        outputMode={outputMode}
+        sampleResolution={sampleResolution}
+        onDotSizeChange={setDotSize}
+        onFrameRateChange={setFrameRate}
+        onOutputModeChange={setOutputMode}
+        onSampleResolutionChange={handleSampleResolutionChange}
+        onVideoUpload={handleVideoUpload}
+      />
 
-      {outputMode === "svg" && (
-        <div className="control-group">
-          <label>
-            Dot Size: {dotSize} px&nbsp;
-            <input
-              type="range"
-              min="1"
-              max="50"
-              value={dotSize}
-              onChange={(e) => setDotSize(Number(e.target.value))}
-            />
-          </label>
+      {error && (
+        <p className="message error-message" role="alert">
+          {error}
+        </p>
+      )}
+
+      {playbackBlocked && !error && (
+        <div className="message" role="status">
+          <span>Playback was blocked by your browser.</span>
+          <button type="button" onClick={() => void startPlayback()}>
+            Play video
+          </button>
         </div>
       )}
-      <div className="control-group">
-        <label>
-          Sample Resolution: {sampleResolution} px&nbsp;
-          <input
-            type="range"
-            min="2"
-            max="50"
-            value={sampleResolution}
-            onChange={(e) => setSampleResolution(Number(e.target.value))}
-          />
-        </label>
-      </div>
-      <div className="control-group">
-        <label>
-          Output Frame Rate (fps): {frameRate}&nbsp;
-          <input
-            type="range"
-            min="1"
-            max="60"
-            value={frameRate}
-            onChange={(e) => setFrameRate(Number(e.target.value))}
-          />
-        </label>
-      </div>
 
       {videoUrl && (
-        <div className="video-container">
-          {/* Hidden video and canvas for frame processing */}
-          <video ref={videoRef} src={videoUrl} className="hidden" />
-          <canvas ref={canvasRef} className="hidden" />
+        <>
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            className="processing-video"
+            loop
+            muted
+            playsInline
+            preload="metadata"
+            onLoadedMetadata={handleLoadedMetadata}
+            onError={() => {
+              setVideoReady(false);
+              setError("The browser could not decode this video.");
+            }}
+          />
+          <canvas ref={samplingCanvasRef} className="hidden" />
 
-          {/* Render the animated halftone SVG */}
-          {outputMode === "svg" && (
-            <svg
-              width={videoDimensions.width}
-              height={videoDimensions.height}
-              className="halftone-svg"
-              viewBox={`0 0 ${videoDimensions.width} ${videoDimensions.height}`}
-            >
-              {halftoneData.map((circle, idx) => (
-                <circle
-                  key={idx}
-                  cx={circle.x}
-                  cy={circle.y}
-                  r={circle.r}
-                  fill="black"
-                />
-              ))}
-            </svg>
+          {videoReady && (
+            <HalftonePreview
+              asciiArt={asciiArt}
+              dimensions={previewDimensions}
+              outputCanvasRef={outputCanvasRef}
+              outputMode={outputMode}
+            />
           )}
-
-          {/* Render the ASCII art */}
-          {outputMode === "ascii" && (
-            <pre className="ascii-art">{asciiArt}</pre>
-          )}
-        </div>
+        </>
       )}
-    </div>
+    </main>
   );
 };
 
